@@ -23,6 +23,7 @@ using MailKit;
 using MimeKit;
 
 namespace MailHandler {
+    
     public interface IMailActuator {
         
         /// <summary>
@@ -66,7 +67,25 @@ namespace MailHandler {
         /// <param name="directory"></param>
         /// <param name="onException"></param>
         /// <returns>List of saved files</returns>
-        List<string> DownloadAndSaveAttachments(IMessageSummary message, string directory, Action<Exception> onException = null);
+        List<string> DownloadThenSaveAttachments(IMessageSummary message, string directory, Action<Exception> onException = null);
+
+        /// <summary>
+        /// Do an action with each attachment for the given message
+        /// </summary>
+        /// <param name="mail"></param>
+        /// <param name="attachmentHandler"></param>
+        /// <param name="onException"></param>
+        /// <returns>List of saved files</returns>
+        void DoForEachAttachments(MimeMessage mail, Action<string, byte[]> attachmentHandler, Action<Exception> onException = null);
+
+        /// <summary>
+        /// Downloads and do an action with each attachment for the given message
+        /// </summary>
+        /// <param name="mail"></param>
+        /// <param name="attachmentHandler"></param>
+        /// <param name="onException"></param>
+        /// <returns>List of saved files</returns>
+        void DownloadThenDoForEachAttachments(IMessageSummary mail, Action<string, byte[]> attachmentHandler, Action<Exception> onException = null);
 
         /// <summary>
         /// Saves all the attachments of the given message in the given directory

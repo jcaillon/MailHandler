@@ -17,6 +17,7 @@
 // along with MailHandler. If not, see <http://www.gnu.org/licenses/>.
 // ========================================================================
 #endregion
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,12 +26,14 @@ using System.Threading.Tasks;
 using MailHandler.Events;
 using MailHandler.Utilities;
 using MailKit;
-using MimeKit;
 
 namespace MailHandler {
-    public class InboxMailHandler : IDisposable, IMailActuator {
-        private const int DelayBeforeCheckingForNewMails = 2000; // in ms
+    
+    public class InboxMailHandler : IDisposable {
 
+        private const int MinimumDelayBeforeHandlingNewMails = 2000; //ms
+        private const int MaximumDelayBeforeHandlingNewMails = 2000 * 10; //ms
+        
         private IMailHandlerConfiguration _config;
         private ImapInboxIdler _imapInboxIdler;
         private Task _imapIdlerTask;
@@ -43,8 +46,10 @@ namespace MailHandler {
         private AsapButDelayableAction _newMailHandler;
 
         public string MailBoxName { get; }
+        
+        private AsapButDelayableAction CheckForNewMail => _newMailHandler ?? (_newMailHandler = new AsapButDelayableAction(_config.MinimumDelayBeforeHandlingNewMails > 0 ? _config.MinimumDelayBeforeHandlingNewMails : MinimumDelayBeforeHandlingNewMails, _config.MaximumDelayBeforeHandlingNewMails > 0 ? _config.MaximumDelayBeforeHandlingNewMails : MaximumDelayBeforeHandlingNewMails, CheckForNewMailTick));
 
-        private AsapButDelayableAction CheckForNewMail => _newMailHandler ?? (_newMailHandler = new AsapButDelayableAction(DelayBeforeCheckingForNewMails, CheckForNewMailTick));
+        public uint LastHandledUid => _lastHandledUid;
 
         /// <summary>
         /// Published when a new mail arrives in the watched folder
@@ -53,6 +58,7 @@ namespace MailHandler {
 
         public InboxMailHandler(IMailHandlerConfiguration config) {
             _config = config;
+            _lastHandledUid = _config.InitiallyLastHandledUid;
             MailBoxName = _config.MailBoxId;
         }
 
@@ -212,7 +218,7 @@ namespace MailHandler {
                 foreach (var message in messages ?? new List<IMessageSummary>()) {
                     _config.Tracer?.TraceVerbose($"New mail with subject -> {message.Envelope.Subject}", $"{this}");
 
-                    var newMessageEvent = new NewMailEventArgs(message, this, _config.Tracer);
+                    var newMessageEvent = new NewMailEventArgs(message, new MailActuator(_imapClient, _smtpClient), _config.Tracer);
                     try {
                         //MulticastDelegate m = (MulticastDelegate)myEvent;  
                         ////Then you can get the delegate list...  
@@ -260,33 +266,5 @@ namespace MailHandler {
             return $"{nameof(InboxMailHandler)}.{MailBoxName}";
         }
 
-        public MimeMessage DownloadMimeMessage(IMessageSummary messageSummary) {
-            return _imapClient.DownloadMimeMessage(messageSummary.UniqueId);
-        }
-
-        public void DownloadThenForwardMessage(IMessageSummary messageSummary, List<string> toMailAddresses) {
-            ForwardMessage(DownloadMimeMessage(messageSummary), toMailAddresses);
-        }
-
-        public void ForwardMessage(MimeMessage message, List<string> toMailAddresses) {
-            _smtpClient.ForwardMessage(message, toMailAddresses.Select(s => new MailboxAddress(s, s)).ToList());
-        }
-
-        public void SendMail(MimeMessage message) {
-            _smtpClient.SendMessage(message);
-        }
-
-        public string DownloadMessageBody(IMessageSummary messageSummary) {
-            return _imapClient.DownloadBody(messageSummary);
-        }
-
-        public List<string> SaveAttachments(MimeMessage mail, string directory, Action<Exception> onException = null) {
-            return _imapClient.SaveAttachments(mail, directory, onException);
-        }
-
-        /// <inheritdoc cref="IMailActuator.DownloadAndSaveAttachments"/>
-        public List<string> DownloadAndSaveAttachments(IMessageSummary message, string directory, Action<Exception> onException = null) {
-            return _imapClient.DownloadAndSaveAttachments(message, directory, onException);
-        }
     }
 }

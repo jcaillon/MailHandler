@@ -24,6 +24,7 @@ using System.Timers;
 
 namespace MailHandler.Utilities {
     internal class AsapButDelayableAction : IDisposable {
+        
         #region Static
 
         private static List<AsapButDelayableAction> _savedActions = new List<AsapButDelayableAction>();
@@ -41,16 +42,20 @@ namespace MailHandler.Utilities {
 
         #region private
 
+        private object _lock = new object();
         private Timer _timer;
         private Action _toDo;
+        private DateTime _timerInitialisationDateTime = DateTime.Now;
         private int _msDelay;
+        private int _msMaxDelay;
 
         #endregion
 
         #region Constructor
 
-        public AsapButDelayableAction(int msDelay, Action toDo) {
+        public AsapButDelayableAction(int msDelay, int msMaxDelay, Action toDo) {
             _msDelay = msDelay;
+            _msMaxDelay = msMaxDelay;
             _toDo = toDo;
             _savedActions.Add(this);
         }
@@ -65,23 +70,33 @@ namespace MailHandler.Utilities {
         /// </summary>
         public void DoDelayable() {
             // do on delay, can be delayed event more if this method is called again
-            if (_timer == null) {
-                _timer = new Timer(_msDelay) {
-                    AutoReset = false
-                };
-                _timer.Elapsed += TimerTick;
-                _timer.Start();
-            } else {
-                // reset timer
-                _timer.Stop();
-                _timer.Start();
+            lock (_lock) {
+                if (_timer == null) {
+                    // init timer
+                    _timer = new Timer(_msDelay) {
+                        AutoReset = false
+                    };
+                    _timer.Elapsed += TimerTick;
+                    _timer.Start();
+                    _timerInitialisationDateTime = DateTime.Now;
+                    return;
+                }
+
+                if (DateTime.Now.Subtract(_timerInitialisationDateTime).TotalMilliseconds < _msMaxDelay) {
+                    // reset timer
+                    _timer.Stop();
+                    _timer.Start();
+                    return;
+                }
             }
+            
+            DoTaskNow();
         }
 
         /// <summary>
         /// Forces to do the action now but still async
         /// </summary>
-        public void DoTaskNow(int maxMsWait = -1) {
+        public void DoTaskNow() {
             TimerTick(this, null);
         }
 
@@ -103,10 +118,12 @@ namespace MailHandler.Utilities {
         /// </summary>
         public void Cancel() {
             try {
-                _timer?.Stop();
-                _timer?.Close();
-                _timer?.Dispose();
-                _timer = null;
+                lock (_lock) {
+                    _timer?.Stop();
+                    _timer?.Close();
+                    _timer?.Dispose();
+                    _timer = null;
+                }
             } finally {
                 _savedActions.Remove(this);
             }

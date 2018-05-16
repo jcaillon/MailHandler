@@ -256,7 +256,7 @@ namespace MailHandler {
             return output;
         }
 
-        public List<string> DownloadAndSaveAttachments(IMessageSummary message, string directory, Action<Exception> onException) {
+        public List<string> DownloadThenSaveAttachments(IMessageSummary message, string directory, Action<Exception> onException) {
             if (!CreateDirectoryIfNeeded(directory, onException))
                 return null;
             var output = new List<string>();
@@ -294,14 +294,52 @@ namespace MailHandler {
                         part.Content.DecodeTo(stream);
                     }
                 }
-
                 return path;
             } catch (Exception e) {
                 _config.Tracer?.TraceError($"Failed to save attachment an attachment - {e}", $"{this}");
                 onException?.Invoke(e);
             }
-
             return null;
+        }
+        
+        public void DoForEachAttachments(MimeMessage mail, Action<string, byte[]> attachmentHandler, Action<Exception> onException) {
+            DoOnLock(() => {
+                mail.Attachments.ToList().ForEach(entity => DoWithMimeEntity(entity, attachmentHandler, onException));
+            });
+        }
+
+        public void DownloadThenDoForEachAttachments(IMessageSummary message, Action<string, byte[]> attachmentHandler, Action<Exception> onException) {
+            DoOnLock(() => {
+                foreach (var attachment in message.Attachments) {
+                    try {
+                        var entity = CurrentFolder.GetBodyPart(message.UniqueId, attachment);
+                        if (entity != null) {
+                            DoWithMimeEntity(entity, attachmentHandler, onException);
+                        }
+                    } catch (Exception e) {
+                        _config.Tracer?.TraceError($"Failed to get an attachment - {e}", $"{this}");
+                        onException?.Invoke(e);
+                    }
+                }
+            });
+        }
+
+        private void DoWithMimeEntity(MimeEntity entity, Action<string, byte[]> attachmentHandler, Action<Exception> onException) {
+            try {
+                using (var stream = new MemoryStream()) {
+                    if (entity is MessagePart) {
+                        var rfc822 = (MessagePart) entity;
+                        rfc822.Message.WriteTo(stream);
+                    } else {
+                        var part = (MimePart) entity;
+                        part.Content.DecodeTo(stream);
+                    }
+                    attachmentHandler?.Invoke(entity.ContentDisposition?.FileName ?? Path.GetRandomFileName(), stream.ToArray());
+                }
+            } catch (Exception e) {
+                _config.Tracer?.TraceError($"Failed to stream an attachment - {e}", $"{this}");
+                onException?.Invoke(e);
+            }
         }
 
         private bool CreateDirectoryIfNeeded(string directory, Action<Exception> onException) {
