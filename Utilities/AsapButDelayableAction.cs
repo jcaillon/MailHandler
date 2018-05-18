@@ -20,6 +20,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Timers;
 
 namespace MailHandler.Utilities {
@@ -34,7 +35,7 @@ namespace MailHandler.Utilities {
         /// </summary>
         public static void CleanAll() {
             foreach (var action in _savedActions.ToList().Where(action => action != null)) {
-                action.Cancel();
+                action.Dispose();
             }
         }
 
@@ -70,31 +71,33 @@ namespace MailHandler.Utilities {
         /// </summary>
         public void DoDelayable() {
             // do on delay, can be delayed event more if this method is called again
-            lock (_lock) {
-                if (_timer == null) {
-                    // init timer
-                    _timer = new Timer(_msDelay) {
-                        AutoReset = false
-                    };
-                    _timer.Elapsed += TimerTick;
-                    _timer.Start();
-                    _timerInitialisationDateTime = DateTime.Now;
-                    return;
-                }
+            if (_msDelay > 0) {
+                lock (_lock) {
+                    if (_timer == null) {
+                        // init timer
+                        _timer = new Timer(_msDelay) {
+                            AutoReset = false
+                        };
+                        _timer.Elapsed += TimerTick;
+                        _timer.Start();
+                        _timerInitialisationDateTime = DateTime.Now;
+                        return;
+                    }
 
-                if (DateTime.Now.Subtract(_timerInitialisationDateTime).TotalMilliseconds < _msMaxDelay) {
-                    // reset timer
-                    _timer.Stop();
-                    _timer.Start();
-                    return;
+                    if (DateTime.Now.Subtract(_timerInitialisationDateTime).TotalMilliseconds < _msMaxDelay) {
+                        // reset timer
+                        _timer.Stop();
+                        _timer.Start();
+                        return;
+                    }
                 }
             }
-            
-            DoTaskNow();
+
+            Task.Factory.StartNew(DoTaskNow);
         }
 
         /// <summary>
-        /// Forces to do the action now but still async
+        /// Forces to do the action now
         /// </summary>
         public void DoTaskNow() {
             TimerTick(this, null);
@@ -117,20 +120,20 @@ namespace MailHandler.Utilities {
         /// Stop the recurrent action
         /// </summary>
         public void Cancel() {
-            try {
-                lock (_lock) {
-                    _timer?.Stop();
-                    _timer?.Close();
-                    _timer?.Dispose();
-                    _timer = null;
-                }
-            } finally {
-                _savedActions.Remove(this);
+            lock (_lock) {
+                _timer?.Stop();
+                _timer?.Close();
+                _timer?.Dispose();
+                _timer = null;
             }
         }
 
         public void Dispose() {
-            Cancel();
+            try {
+                Cancel();
+            } finally {
+                _savedActions.Remove(this);
+            }
         }
 
         #endregion

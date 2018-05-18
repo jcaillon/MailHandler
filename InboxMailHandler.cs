@@ -55,6 +55,16 @@ namespace MailHandler {
         /// Published when a new mail arrives in the watched folder
         /// </summary>
         public event EventHandler<NewMailEventArgs> NewMessage;
+        
+        /// <summary>
+        /// Published when a new batch of mails is handled
+        /// </summary>
+        public event EventHandler NewMessageBatchStarting;
+        
+        /// <summary>
+        /// Published when a new batch of mails has been handled
+        /// </summary>
+        public event EventHandler NewMessageBatchEnding;
 
         public InboxMailHandler(IMailHandlerConfiguration config) {
             _config = config;
@@ -70,6 +80,8 @@ namespace MailHandler {
             DisconnectClientsIfNeeded();
 
             NewMessage = null;
+            NewMessageBatchStarting = null;
+            NewMessageBatchEnding = null;
             _config = null;
         }
 
@@ -214,6 +226,8 @@ namespace MailHandler {
 
                     messages = null;
                 }
+                
+                NewMessageBatchStarting?.Invoke(this, EventArgs.Empty);
 
                 foreach (var message in messages ?? new List<IMessageSummary>()) {
                     _config.Tracer?.TraceVerbose($"New mail with subject -> {message.Envelope.Subject}", $"{this}");
@@ -257,6 +271,8 @@ namespace MailHandler {
 
                     _lastHandledUid = message.UniqueId.Id;
                 }
+                
+                NewMessageBatchEnding?.Invoke(this, EventArgs.Empty);
 
                 unhandledUids.RemoveRange(0, maxMailPerBatch);
             }
