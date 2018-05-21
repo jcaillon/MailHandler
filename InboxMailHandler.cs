@@ -28,8 +28,7 @@ using MailHandler.Utilities;
 using MailKit;
 
 namespace MailHandler {
-    
-    public class InboxMailHandler : IDisposable {
+    public class InboxMailHandler : IDisposable, IInboxMailHandler {
 
         private const int MinimumDelayBeforeHandlingNewMails = 2000; //ms
         private const int MaximumDelayBeforeHandlingNewMails = 2000 * 10; //ms
@@ -40,7 +39,6 @@ namespace MailHandler {
         private ImapInboxClient _imapClient;
         private SmtpBasicClient _smtpClient;
         private long _nbMails; // accessed from multiple threads
-        private uint _lastHandledUid;
         private long _treatmentRequestFailed;
         private object _newMailTaskLock = new object();
         private AsapButDelayableAction _newMailHandler;
@@ -49,7 +47,12 @@ namespace MailHandler {
         
         private AsapButDelayableAction CheckForNewMail => _newMailHandler ?? (_newMailHandler = new AsapButDelayableAction(_config.MinimumDelayBeforeHandlingNewMails > 0 ? _config.MinimumDelayBeforeHandlingNewMails : MinimumDelayBeforeHandlingNewMails, _config.MaximumDelayBeforeHandlingNewMails > 0 ? _config.MaximumDelayBeforeHandlingNewMails : MaximumDelayBeforeHandlingNewMails, CheckForNewMailTick));
 
-        public uint LastHandledUid => _lastHandledUid;
+        /// <summary>
+        /// The UID of the last handled mail in a previous session that should be used when we start the mail handler. 
+        /// IF its value is 0, all the mails in the inbox folder will be handled when the handler is started, otherwise
+        /// all the mail with a UID inferior to this value will be ignored for the whole session
+        /// </summary>
+        public uint LastHandledUid { get; set; }
 
         /// <summary>
         /// Published when a new mail arrives in the watched folder
@@ -68,7 +71,6 @@ namespace MailHandler {
 
         public InboxMailHandler(IMailHandlerConfiguration config) {
             _config = config;
-            _lastHandledUid = _config.InitiallyLastHandledUid;
             MailBoxName = _config.MailBoxId;
         }
 
@@ -156,7 +158,7 @@ namespace MailHandler {
 
         private void ImapInboxIdlerOnUidValidityChanged(object sender, EventArgs e) {
             _config.Tracer?.TraceWarning($"The UidValidity of the mailbox has changed, dropping local cached data", $"{this}");
-            _lastHandledUid = 0;
+            LastHandledUid = 0;
             CheckForNewMail.DoDelayable();
         }
 
@@ -203,7 +205,7 @@ namespace MailHandler {
             _config.Tracer?.TraceVerbose($"Checking for new UIDs", $"{this}");
 
             var uids = _imapClient.GetUis();
-            var unhandledUids = uids.Where(uid => uid.Id > _lastHandledUid).OrderBy(uid => uid.Id).ToList();
+            var unhandledUids = uids.Where(uid => uid.Id > LastHandledUid).OrderBy(uid => uid.Id).ToList();
 
             int maxMailPerBatch = int.MaxValue;
             while (unhandledUids.Count > 0) {
@@ -269,7 +271,7 @@ namespace MailHandler {
                         _config.Tracer?.TraceError($"An error has occured after the {nameof(NewMessage)} event handler - {e}", $"{this}");
                     }
 
-                    _lastHandledUid = message.UniqueId.Id;
+                    LastHandledUid = message.UniqueId.Id;
                 }
                 
                 NewMessageBatchEnding?.Invoke(this, EventArgs.Empty);

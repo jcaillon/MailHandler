@@ -56,12 +56,5 @@ namespace MailHandler {
         /// 
         /// </summary>
         int MaximumDelayBeforeHandlingNewMails { get; }
-        
-        /// <summary>
-        /// The UID of the last handled mail in a previous session that should be used when we start the mail handler. 
-        /// IF its value is 0, all the mails in the inbox folder will be handled when the handler is started, otherwise
-        /// all the mail with a UID inferior to this value will be ignored for the whole session
-        /// </summary>
-        uint InitiallyLastHandledUid { get; }
     }
 }
