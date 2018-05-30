@@ -99,6 +99,8 @@ namespace MailHandler {
                     _currentFolder.UidValidityChanged -= InboxOnUidValidityChanged;
                 }
 
+                _currentFolder = null;
+
                 if (_imapClient != null && _imapClient.IsConnected) {
                     _imapClient.Disconnect(true);
                     _imapClient.Dispose();
@@ -174,7 +176,7 @@ namespace MailHandler {
             try {
                 // connexion and authentication
                 _imapClient = _factory.GetImapClient();
-                _config.Tracer?.TraceInformation($"Connected and authenticated successfully", $"{this}");
+                _config.Tracer?.TraceVerbose($"Connected and authenticated successfully", $"{this}");
 
                 CurrentFolder.Open(FolderAccess.ReadOnly);
                 _config.Tracer?.TraceVerbose($"Inbox opened", $"{this}");

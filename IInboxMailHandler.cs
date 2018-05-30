@@ -20,12 +20,12 @@ namespace MailHandler {
         /// <summary>
         /// Published when a new batch of mails is handled
         /// </summary>
-        event EventHandler NewMessageBatchStarting;
+        event EventHandler<BatchEventArgs> NewMessageBatchStarting;
 
         /// <summary>
         /// Published when a new batch of mails has been handled
         /// </summary>
-        event EventHandler NewMessageBatchEnding;
+        event EventHandler<BatchEventArgs> NewMessageBatchEnding;
 
         /// <summary>
         /// Start to listen for events from the imap server and publish new message events when needed

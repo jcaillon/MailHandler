@@ -25,14 +25,26 @@ using MailKit;
 using MimeKit;
 
 namespace MailHandler {
-    public class MailActuator : IMailActuator {
-        
-        private ImapInboxClient _imapClient;
-        private SmtpBasicClient _smtpClient;
 
-        internal MailActuator(ImapInboxClient imapClient, SmtpBasicClient smtpClient) {
-            _imapClient = imapClient;
+    public class MailSimpleSmtpActuator : IMailSimpleSmtpActuator {
+        
+        internal readonly SmtpBasicClient _smtpClient;
+        
+        internal MailSimpleSmtpActuator(SmtpBasicClient smtpClient) {
             _smtpClient = smtpClient;
+        }
+        
+        public void SendMail(MimeMessage message) {
+            _smtpClient.SendMessage(message);
+        }
+    }
+    
+    public class MailActuator : MailSimpleSmtpActuator, IMailActuator {
+        
+        private readonly ImapInboxClient _imapClient;
+
+        internal MailActuator(ImapInboxClient imapClient, SmtpBasicClient smtpClient) : base(smtpClient) {
+            _imapClient = imapClient;
         }
 
         public MimeMessage DownloadMimeMessage(IMessageSummary messageSummary) {
@@ -45,10 +57,6 @@ namespace MailHandler {
 
         public void ForwardMessage(MimeMessage message, List<string> toMailAddresses) {
             _smtpClient.ForwardMessage(message, toMailAddresses.Select(s => new MailboxAddress(s, s)).ToList());
-        }
-
-        public void SendMail(MimeMessage message) {
-            _smtpClient.SendMessage(message);
         }
 
         public string DownloadMessageBody(IMessageSummary messageSummary) {

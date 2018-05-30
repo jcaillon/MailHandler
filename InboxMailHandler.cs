@@ -62,12 +62,12 @@ namespace MailHandler {
         /// <summary>
         /// Published when a new batch of mails is handled
         /// </summary>
-        public event EventHandler NewMessageBatchStarting;
+        public event EventHandler<BatchEventArgs> NewMessageBatchStarting;
         
         /// <summary>
         /// Published when a new batch of mails has been handled
         /// </summary>
-        public event EventHandler NewMessageBatchEnding;
+        public event EventHandler<BatchEventArgs> NewMessageBatchEnding;
 
         public InboxMailHandler(IMailHandlerConfiguration config) {
             _config = config;
@@ -226,12 +226,12 @@ namespace MailHandler {
                         continue;
                     }
 
-                    messages = null;
+                    messages = new List<IMessageSummary>();
                 }
                 
-                NewMessageBatchStarting?.Invoke(this, EventArgs.Empty);
+                NewMessageBatchStarting?.Invoke(this, new BatchEventArgs(new MailSimpleSmtpActuator(_smtpClient), _config.Tracer));
 
-                foreach (var message in messages ?? new List<IMessageSummary>()) {
+                foreach (var message in messages) {
                     _config.Tracer?.TraceVerbose($"New mail with subject -> {message.Envelope.Subject}", $"{this}");
 
                     var newMessageEvent = new NewMailEventArgs(message, new MailActuator(_imapClient, _smtpClient), _config.Tracer);
@@ -274,7 +274,8 @@ namespace MailHandler {
                     LastHandledUid = message.UniqueId.Id;
                 }
                 
-                NewMessageBatchEnding?.Invoke(this, EventArgs.Empty);
+                NewMessageBatchEnding?.Invoke(this, new BatchEventArgs(new MailSimpleSmtpActuator(_smtpClient), _config.Tracer));
+               
 
                 unhandledUids.RemoveRange(0, maxMailPerBatch);
             }

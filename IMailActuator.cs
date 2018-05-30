@@ -23,8 +23,17 @@ using MailKit;
 using MimeKit;
 
 namespace MailHandler {
+
+    public interface IMailSimpleSmtpActuator {
+        
+        /// <summary>
+        /// Sends the given message
+        /// </summary>
+        /// <param name="message"></param>
+        void SendMail(MimeMessage message);
+    }
     
-    public interface IMailActuator {
+    public interface IMailActuator : IMailSimpleSmtpActuator{
         
         /// <summary>
         /// Downloads the entire mail from the imap server as a MimeMessage
@@ -46,12 +55,6 @@ namespace MailHandler {
         /// <param name="message"></param>
         /// <param name="toMailAddresses"></param>
         void ForwardMessage(MimeMessage message, List<string> toMailAddresses);
-
-        /// <summary>
-        /// Sends the given message
-        /// </summary>
-        /// <param name="message"></param>
-        void SendMail(MimeMessage message);
 
         /// <summary>
         /// Download the message body from the imap server

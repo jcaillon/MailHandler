@@ -32,7 +32,7 @@ namespace MailHandler {
     internal class SmtpBasicClient : IDisposable {
         protected const int IncreaseRetryTimingUntil = 10;
         protected const int InitialRetryTimingInMinutes = 1;
-        protected const int KeepAliveTimeout = 2 * 60 * 1000;
+        protected const int KeepAliveTimeout = 60 * 60 * 1000;
 
         private int _retryTimingInMinutes = InitialRetryTimingInMinutes;
         private int _retryCount;
@@ -68,7 +68,7 @@ namespace MailHandler {
             DisconnectIfNeeded();
         }
 
-        protected void DisconnectIfNeeded() {
+        public void DisconnectIfNeeded() {
             try {
                 _timeoutKeepAlive?.Stop();
                 if (Client != null) {
@@ -92,7 +92,7 @@ namespace MailHandler {
             try {
                 // connexion and authentication
                 Client = Factory.GetSmtpClient();
-                _config.Tracer?.TraceInformation($"Connected and authenticated successfully", $"{this}");
+                _config.Tracer?.TraceVerbose($"Connected and authenticated successfully", $"{this}");
             } catch (Exception e) {
                 if (!_anthenticatedSuccessfully) {
                     // we never authenticated successfully, probably a credential error
@@ -115,19 +115,13 @@ namespace MailHandler {
             lock (Client.SyncRoot) {
                 try {
                     action?.Invoke();
-                } catch (Exception e) {
-                    if (!Client.IsConnected || e.Message.ToLower().Contains("connection timed out")) {
-                        _config.Tracer?.TraceInformation($"Client appears disconnected, trying to reconnect", $"{this}");
-                        Connect();
-                        try {
-                            action?.Invoke();
-                        } catch (Exception e2) {
-                            _config.Tracer?.TraceError($"Command failed - {e2}", $"{this}");
-                            throw new Exception($"{this}: command failed - {e2}", e2);
-                        }
-                    } else {
-                        _config.Tracer?.TraceError($"Command failed - {e}", $"{this}");
-                        throw new Exception($"{this}: command failed - {e}", e);
+                } catch (Exception) {
+                    Connect();
+                    try {
+                        action?.Invoke();
+                    } catch (Exception e2) {
+                        _config.Tracer?.TraceError($"Command failed - {e2}", $"{this}");
+                        throw new Exception($"{this}: command failed - {e2}", e2);
                     }
                 } finally {
                     _timeoutKeepAlive?.Start();
@@ -136,6 +130,10 @@ namespace MailHandler {
         }
 
         private void TimeoutKeepAliveOnElapsed(object sender, ElapsedEventArgs e) {
+            SendNoOpCommand();
+        }
+
+        public void SendNoOpCommand() {
             DoOnLock(() => {
                 Client.NoOp();
                 _config.Tracer?.TraceVerbose($"NoOp command sent", $"{this}");

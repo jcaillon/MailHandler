@@ -69,9 +69,10 @@ namespace MailHandler {
             DisconnectIfNeeded();
         }
 
-        protected void DisconnectIfNeeded() {
+        public void DisconnectIfNeeded() {
             try {
                 _timeoutKeepAlive?.Stop();
+                _currentFolder = null;
                 if (Client != null) {
                     Client.Disconnected -= ImapClientOnDisconnected;
                 }
@@ -93,7 +94,7 @@ namespace MailHandler {
             try {
                 // connexion and authentication
                 Client = Factory.GetImapClient();
-                _config.Tracer?.TraceInformation($"Connected and authenticated successfully", $"{this}");
+                _config.Tracer?.TraceVerbose($"Connected and authenticated successfully", $"{this}");
 
                 CurrentFolder.Open(FolderAccess.ReadWrite);
                 _config.Tracer?.TraceVerbose($"Inbox opened", $"{this}");
@@ -120,19 +121,13 @@ namespace MailHandler {
                 _timeoutKeepAlive?.Stop();
                 try {
                     action?.Invoke();
-                } catch (Exception e) {
-                    if (!Client.IsConnected) {
-                        _config.Tracer?.TraceInformation($"Client appears disconnected, trying to reconnect", $"{this}");
-                        Connect();
-                        try {
-                            action?.Invoke();
-                        } catch (Exception e2) {
-                            _config.Tracer?.TraceError($"Command failed - {e2}", $"{this}");
-                            throw new Exception($"{this}: command failed - {e2}", e2);
-                        }
-                    } else {
-                        _config.Tracer?.TraceError($"Command failed - {e}", $"{this}");
-                        throw new Exception($"{this}: command failed - {e}", e);
+                } catch (Exception) {
+                    Connect();
+                    try {
+                        action?.Invoke();
+                    } catch (Exception e2) {
+                        _config.Tracer?.TraceError($"Command failed - {e2}", $"{this}");
+                        throw new Exception($"{this}: command failed - {e2}", e2);
                     }
                 } finally {
                     _timeoutKeepAlive?.Start();
@@ -141,13 +136,17 @@ namespace MailHandler {
         }
 
         private void TimeoutKeepAliveOnElapsed(object sender, System.Timers.ElapsedEventArgs e) {
+            SendNoOpCommand();
+        }
+
+        public void SendNoOpCommand() {
             DoOnLock(() => {
                 CurrentFolder.Close();
                 CurrentFolder.Open(FolderAccess.ReadWrite);
                 _config.Tracer?.TraceVerbose($"NoOp command sent", $"{this}");
             });
         }
-
+        
         public void Connect() {
             _anthenticatedSuccessfully = false;
 
