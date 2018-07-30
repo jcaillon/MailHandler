@@ -121,6 +121,10 @@ namespace MailHandler {
             DisconnectClientsIfNeeded();
         }
 
+        public void WaitForIdler() {
+            _imapIdlerTask.Wait();
+        }
+        
         private void ConnectClients() {
             _imapInboxIdler.CountChanged += ImapInboxIdlerOnCountChanged;
             _imapInboxIdler.MessageExpunged += ImapInboxIdlerOnMessageExpunged;

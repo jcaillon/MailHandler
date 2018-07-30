@@ -38,5 +38,10 @@ namespace MailHandler {
         /// Call this method to stop listening to imap server events
         /// </summary>
         void StopListening();
+        
+        /// <summary>
+        /// Call this method to wait for the idler to stop
+        /// </summary>
+        void WaitForIdler();
     }
 }
